@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+
+K3S_VERSION="{{ .Version }}"
+VIP="{{ .VIP }}"
+
+curl -fsSL https://get.k3s.io -o /tmp/k3s-installer.sh
+chmod +x /tmp/k3s-installer.sh
+
+INSTALL_K3S_SKIP_START=false \
+INSTALL_K3S_VERSION="${K3S_VERSION}" \
+K3S_TOKEN="{{ .Token }}" \
+K3S_URL="https://${VIP}:6443" \
+  /tmp/k3s-installer.sh agent \
+{{ range .NodeLabels -}}
+  --node-label="{{ . }}" \
+{{ end -}}
+{{ range .NodeTaints -}}
+  --node-taint="{{ . }}" \
+{{ end -}}
+{{ range .ExtraArgs -}}
+  {{ . }} \
+{{ end -}}
+
+echo "K3s worker agent started"

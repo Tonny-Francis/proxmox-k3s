@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euo pipefail
+
+K3S_VERSION="{{ .Version }}"
+VIP="{{ .VIP }}"
+CLUSTER_CIDR="{{ .ClusterCIDR }}"
+SERVICE_CIDR="{{ .ServiceCIDR }}"
+
+curl -fsSL https://get.k3s.io -o /tmp/k3s-installer.sh
+chmod +x /tmp/k3s-installer.sh
+
+INSTALL_K3S_SKIP_START=false \
+INSTALL_K3S_VERSION="${K3S_VERSION}" \
+K3S_TOKEN="{{ .Token }}" \
+  /tmp/k3s-installer.sh server \
+  --server "https://${VIP}:6443" \
+  --tls-san="${VIP}" \
+{{ range .SANs -}}
+  --tls-san="{{ . }}" \
+{{ end -}}
+  --cluster-cidr="${CLUSTER_CIDR}" \
+  --service-cidr="${SERVICE_CIDR}" \
+  --disable=servicelb \
+  --disable=traefik \
+{{ range .ExtraArgs -}}
+  {{ . }} \
+{{ end -}}
+  --write-kubeconfig-mode=644
+
+echo "Waiting for K3s to start..."
+timeout 120 bash -c 'until kubectl get node &>/dev/null; do sleep 2; done'
+echo "K3s master (join) ready"
