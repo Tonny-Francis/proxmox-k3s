@@ -38,7 +38,7 @@ jobs:
         run: go test -race -coverprofile=coverage.out ./internal/...
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: coverage.out
         continue-on-error: true
