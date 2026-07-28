@@ -1,0 +1,39 @@
+# Binário compilado
+proxmox-k3s
+dist/
+
+# Configurações de cluster com dados reais (nunca commitar)
+*.cluster.yaml
+cluster.yaml
+cluster.local.yaml
+kubeconfig
+kubeconfig-*
+*.kubeconfig
+
+# Chaves e certificados
+*.pem
+*.key
+*.crt
+*.p12
+
+# Variáveis de ambiente locais
+.env
+.env.local
+
+# Logs de execução
+~/.proxmox-k3s/
+
+# Go
+vendor/
+*.test
+*.out
+coverage.out
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store

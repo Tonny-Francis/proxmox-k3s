@@ -1,0 +1,130 @@
+# Exemplo: Cluster K3s em Alta Disponibilidade
+#
+# Este exemplo configura um cluster HA com:
+#   - 3 masters com etcd embutido + kube-vip (VIP L2/ARP)
+#   - 3 workers de uso geral
+#   - MetalLB para Service type: LoadBalancer
+#   - IPs estáticos do pool declarado
+#
+# Pré-requisitos:
+#   - Template cloud-init criado (ver docs/proxmox-setup.md)
+#   - API token exportado: export PROXMOX_TOKEN="seu-token"
+#   - IPs 192.168.20.50-99 livres na sua rede
+#   - IP 192.168.20.10 (VIP) livre e não respondendo a ping
+#
+# Quickstart:
+#   proxmox-k3s validate -c examples/cluster.ha.yaml
+#   proxmox-k3s create  -c examples/cluster.ha.yaml
+
+cluster_name: homelab
+provider: proxmox
+
+proxmox:
+  # URL da API do Proxmox VE (incluindo porta)
+  endpoint: https://pve.local:8006
+
+  # API Token — veja docs/proxmox-setup.md para criar
+  token_id: "k3s@pve!k3s"
+  token_secret: "${PROXMOX_TOKEN}"    # nunca coloque o valor aqui diretamente
+
+  # Para homelab com certificado self-signed
+  insecure_skip_tls_verify: true
+  # Para produção com CA própria:
+  # ca_file: /etc/ssl/certs/proxmox-ca.pem
+
+  # Hosts PVE elegíveis para criação das VMs
+  # Default: todos os nós online do cluster PVE
+  target_nodes: [pve1, pve2, pve3]
+
+  # Template VM com cloud-init e qemu-guest-agent
+  template: ubuntu-2404-cloudinit
+
+  # Storage para os discos das VMs
+  storage: local-lvm
+
+  # Distribui VMs entre hosts PVE uniformemente
+  # Opções: round-robin | least-loaded | pinned
+  placement_strategy: round-robin
+
+  # Intervalo de VMIDs a usar (opcional — default: 100-999999)
+  vmid_range: [200, 299]
+
+networking:
+  # Modo de alocação de IP: static | dhcp
+  mode: static
+
+  # Bridge do Proxmox para a rede dos nós
+  bridge: vmbr0
+
+  # VLAN (omitir se não usar VLANs)
+  # vlan_tag: 20
+
+  # CIDR da rede
+  cidr: 192.168.20.0/24
+  gateway: 192.168.20.1
+  nameservers: [192.168.20.1, 1.1.1.1]
+  search_domains: [local]
+
+  # IPs reservados para os nós (deve conter IPs para todos os masters + workers)
+  node_pool_range: 192.168.20.50-192.168.20.99
+
+  # VIP do control plane (kube-vip) — deve estar FORA do node_pool_range
+  # e FORA do address_pool do MetalLB
+  control_plane_vip: 192.168.20.10
+
+  ssh:
+    public_key_path: ~/.ssh/id_ed25519.pub
+    private_key_path: ~/.ssh/id_ed25519
+    port: 22
+
+k3s:
+  # Versão exata recomendada para produção
+  # Use "stable" para sempre a última estável
+  version: v1.31.4+k3s1
+
+  # CNI: flannel (default, simples) | cilium (avançado, v1)
+  cni: flannel
+
+  # CIDRs internos do cluster (não precisam ser roteáveis na LAN)
+  cluster_cidr: 10.42.0.0/16
+  service_cidr: 10.43.0.0/16
+
+masters_pool:
+  # Sempre ímpar, sempre >= 3 para HA real
+  count: 3
+
+  # Tamanho do catálogo: cp-small | cp-medium | cp-large
+  # cp-medium = 4 vCPU / 8 GB RAM / 60 GB disco
+  size: cp-medium
+
+worker_node_pools:
+  - name: general
+    count: 3
+
+    # standard-2 | standard-4 | standard-8 | memory-4 | memory-8 | cpu-8
+    # standard-4 = 4 vCPU / 8 GB RAM / 100 GB disco
+    size: standard-4
+
+    labels:
+      workload: general
+
+addons:
+  # kube-vip: VIP flutuante para o API Server (obrigatório com count > 1)
+  kube_vip:
+    enabled: true
+
+  # MetalLB: IPs reais da LAN para Service type: LoadBalancer
+  metallb:
+    enabled: true
+    address_pool: 192.168.20.200-192.168.20.220
+
+  # system-upgrade-controller: gerencia upgrades do K3s (recomendado)
+  system_upgrade_controller:
+    enabled: true
+
+  # proxmox-ccm e proxmox-csi: disponíveis na v1
+  # proxmox_ccm:
+  #   enabled: true
+  # proxmox_csi:
+  #   enabled: true
+  #   storage: local-lvm

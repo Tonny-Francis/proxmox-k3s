@@ -1,0 +1,53 @@
+# Exemplo: Cluster com DHCP
+#
+# Variação do cluster.ha.yaml usando DHCP em vez de IPs estáticos.
+# Útil quando seu servidor DHCP já gerencia a rede e você não quer
+# manter um pool estático no YAML.
+#
+# Recomendação: configure reservas DHCP por MAC para IPs estáveis.
+# O framework gera MACs determinísticos baseados no nome do cluster
+# e no índice de cada nó.
+
+cluster_name: homelab-dhcp
+provider: proxmox
+
+proxmox:
+  endpoint: https://pve.local:8006
+  token_id: "k3s@pve!k3s"
+  token_secret: "${PROXMOX_TOKEN}"
+  insecure_skip_tls_verify: true
+  template: ubuntu-2404-cloudinit
+  storage: local-lvm
+
+networking:
+  mode: dhcp
+  bridge: vmbr0
+
+  # O VIP ainda precisa ser estático — é o endereço que o kubectl usa
+  # e que deve ser fixo independentemente do DHCP
+  control_plane_vip: 192.168.20.10
+
+  ssh:
+    public_key_path: ~/.ssh/id_ed25519.pub
+    private_key_path: ~/.ssh/id_ed25519
+
+k3s:
+  version: v1.31.4+k3s1
+
+masters_pool:
+  count: 3
+  size: cp-medium
+
+worker_node_pools:
+  - name: general
+    count: 3
+    size: standard-4
+
+addons:
+  kube_vip:
+    enabled: true
+  metallb:
+    enabled: true
+    address_pool: 192.168.20.200-192.168.20.220
+  system_upgrade_controller:
+    enabled: true
