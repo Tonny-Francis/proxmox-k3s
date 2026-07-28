@@ -22,13 +22,15 @@ const (
 )
 
 type Provider struct {
-	client    *client.Client
-	vmMgr     *vm.Manager
-	nodeLister *node.Lister
-	strategy  placement.Strategy
-	cloneSem  map[string]chan struct{}
-	semMu     sync.Mutex
-	maxClones int
+	client      *client.Client
+	vmMgr       *vm.Manager
+	nodeLister  *node.Lister
+	strategy    placement.Strategy
+	cloneSem    map[string]chan struct{}
+	semMu       sync.Mutex
+	maxClones   int
+	templateName string
+	storageName  string
 }
 
 var _ ports.InfraProvider = (*Provider)(nil)
@@ -46,12 +48,14 @@ func NewProvider(cfg domain.ProxmoxConfig) (*Provider, error) {
 	}
 
 	return &Provider{
-		client:     c,
-		vmMgr:      vm.NewManager(c),
-		nodeLister: node.NewLister(c),
-		strategy:   placement.NewStrategy(cfg.PlacementStrategy),
-		cloneSem:   make(map[string]chan struct{}),
-		maxClones:  2,
+		client:       c,
+		vmMgr:        vm.NewManager(c),
+		nodeLister:   node.NewLister(c),
+		strategy:     placement.NewStrategy(cfg.PlacementStrategy),
+		cloneSem:     make(map[string]chan struct{}),
+		maxClones:    2,
+		templateName: cfg.Template,
+		storageName:  cfg.Storage,
 	}, nil
 }
 
@@ -147,7 +151,7 @@ func (p *Provider) CreateNode(ctx context.Context, spec domain.NodeSpec) (domain
 		}
 	}
 
-	tmpl, err := p.nodeLister.FindTemplate(ctx, "")
+	tmpl, err := p.nodeLister.FindTemplate(ctx, p.templateName)
 	if err != nil {
 		return domain.Node{}, err
 	}
@@ -165,7 +169,7 @@ func (p *Provider) CreateNode(ctx context.Context, spec domain.NodeSpec) (domain
 		NewID:      vmid,
 		Name:       spec.Name,
 		Full:       1,
-		Storage:    "",
+		Storage:    p.storageName,
 		TargetNode: hostNode,
 	})
 	if err != nil {
